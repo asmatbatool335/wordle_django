@@ -1,0 +1,102 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordle Game</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #121213; color: #fff; text-align: center; }
+        .wordle-board { display: inline-block; margin-top: 40px; }
+        .row { display: flex; justify-content: center; margin-bottom: 5px; }
+        .cell { width: 40px; height: 40px; border: 2px solid #3a3a3c; margin: 2px; font-size: 2em; text-transform: uppercase; background: #121213; color: #fff; display: flex; align-items: center; justify-content: center; }
+        .cell.correct { background: #538d4e; border-color: #538d4e; }
+        .cell.present { background: #b59f3b; border-color: #b59f3b; }
+        .cell.absent { background: #3a3a3c; border-color: #3a3a3c; }
+        input[type="text"] { font-size: 1.2em; padding: 5px; margin-top: 20px; }
+        button { font-size: 1.2em; padding: 5px 15px; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Wordle Game</h1>
+    <form action="/new/" method="post" style="margin-bottom: 20px;">
+        {% csrf_token %}
+        <button type="submit" style="font-size:1em; padding:5px 20px;">New Game</button>
+    </form>
+    <div class="wordle-board" id="board"></div>
+    <form id="guess-form" autocomplete="off">
+        <input type="text" id="guess-input" maxlength="5" minlength="5" required pattern="[A-Za-z]{5}" autofocus>
+        <button type="submit">Guess</button>
+    </form>
+    <div id="message"></div>
+    <script>
+        const board = document.getElementById('board');
+        const form = document.getElementById('guess-form');
+        const input = document.getElementById('guess-input');
+        const message = document.getElementById('message');
+        let guesses = [];
+        let results = [];
+        let gameOver = false;
+        const maxGuesses = 6;
+        function renderBoard() {
+            board.innerHTML = '';
+            for (let i = 0; i < maxGuesses; i++) {
+                const row = document.createElement('div');
+                row.className = 'row';
+                let guess = guesses[i] || '';
+                let result = results[i] || [];
+                for (let j = 0; j < 5; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    if (guess[j]) {
+                        cell.textContent = guess[j];
+                        if (result[j]) {
+                            cell.classList.add(result[j]);
+                        }
+                    }
+                    row.appendChild(cell);
+                }
+                board.appendChild(row);
+            }
+        }
+        form.onsubmit = async function(e) {
+            e.preventDefault();
+            if (gameOver) return;
+            const guess = input.value.toUpperCase();
+            if (guess.length !== 5) return;
+            // Send guess to backend
+            const response = await fetch('api/check/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ guess })
+            });
+            const data = await response.json();
+            guesses.push(guess);
+            results.push(data.result);
+            renderBoard();
+            input.value = '';
+            if (data.is_correct) {
+                message.textContent = 'Congratulations! You guessed the word!';
+                gameOver = true;
+            } else if (guesses.length === maxGuesses) {
+                // If solution is not present, fetch it with reveal=true
+                if (!data.solution) {
+                    fetch('api/check/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ guess: '', reveal: true })
+                    })
+                    .then(res => res.json())
+                    .then(revealData => {
+                        message.textContent = 'Game over! The word was ' + revealData.solution + '.';
+                    });
+                } else {
+                    message.textContent = 'Game over! The word was ' + data.solution + '.';
+                }
+                gameOver = true;
+            }
+        };
+        renderBoard();
+    </script>
+</body>
+</html> 
