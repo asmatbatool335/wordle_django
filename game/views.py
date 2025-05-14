@@ -3,6 +3,7 @@ import json
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from collections import Counter
 
 # A simple list of 5-letter words (expand as needed)
 WORD_LIST = [
@@ -42,18 +43,22 @@ def check_guess(request):
         result = ['absent'] * 5
         solution_chars = list(solution)
         guess_chars = list(guess)
+
         # First pass: mark correct (green)
         for i in range(5):
             if guess_chars[i] == solution_chars[i]:
                 result[i] = 'correct'
                 solution_chars[i] = None  # Mark as used
-                guess_chars[i] = None
+                guess_chars[i] = None     # Mark as used
+
+        # Count remaining unmatched letters in the solution
+        remaining = Counter([c for c in solution_chars if c is not None])
+
         # Second pass: mark present (yellow)
         for i in range(5):
-            if guess_chars[i] is not None and guess_chars[i] in solution_chars:
+            if guess_chars[i] is not None and remaining[guess_chars[i]] > 0:
                 result[i] = 'present'
-                # Remove the first occurrence from solution_chars
-                solution_chars[solution_chars.index(guess_chars[i])] = None
+                remaining[guess_chars[i]] -= 1
         is_correct = guess == solution
         out_of_guesses = len(guesses) >= MAX_GUESSES and not is_correct
         reveal_solution = is_correct or out_of_guesses or data.get('reveal')
